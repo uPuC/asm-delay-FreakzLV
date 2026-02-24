@@ -1,6 +1,6 @@
 ;------------- definiciones e includes ------------------------------
-.INCLUDE "m1280def.inc" ; Incluir definiciones de Registros para 1280
-;.INCLUDE "m2560def.inc" ; Incluir definiciones de Registros para 2560
+;INCLUDE "m1280def.inc" ; Incluir definiciones de Registros para 1280
+.INCLUDE "m2560def.inc" ; Incluir definiciones de Registros para 2560
 
 .equ INIT_VALUE = 0 ; Valor inicial R24
 
@@ -89,7 +89,6 @@ delay4mS:
 call delay1S ;5
 nop
 
-
 delay1S:
     ldi r26, 250        ; 1
 loop1s:
@@ -105,15 +104,14 @@ ret                     ; 5
 ; n = 15,999,990/64,0003 = 249.9881 -> 250 (aprox) -> 1.0000475 S
 ;---------------------------------------------------------------
 
-;-------- 4mS para usar en el 1S  --------------              
-delay4mS:
-	ldi R24, 90    		;1
-	nxt: 
-		ldi R25, 236    ;n
-		nxt2:
-			dec R25		;m*n
-			brne nxt2	;(2m-1)*n
-		dec R24			;n
-		brne nxt		;2n-1
-	ret					;5
-;-----------------------------------------------
+arriba: inc R24
+	cpi R24,10
+	breq abajo
+	out PORTA,R24
+	rjmp arriba
+
+abajo: dec R24
+	cpi R24,0
+	breq arriba
+	out PORTA,R24
+	rjmp abajo
