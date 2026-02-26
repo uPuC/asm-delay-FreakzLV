@@ -1,18 +1,28 @@
 ;------------- definiciones e includes ------------------------------
-;INCLUDE "m1280def.inc" ; Incluir definiciones de Registros para 1280
-.INCLUDE "m2560def.inc" ; Incluir definiciones de Registros para 2560
+.INCLUDE "m1280def.inc" ; Incluir definiciones de Registros para 1280
+;INCLUDE "m2560def.inc" ; Incluir definiciones de Registros para 2560
 
 .equ INIT_VALUE = 0 ; Valor inicial R24
 
 ;------------- inicializar ------------------------------------------
-ldi R24,INIT_VALUE
-ldi R25,INIT_VALUE
-ldi R26,INIT_VALUE
+ldi R20, INIT_VALUE
+ldi R21, INIT_VALUE
+ldi R22, INIT_VALUE
+ldi R23, INIT_VALUE
+ldi R25, INIT_VALUE
 ;------------- implementar ------------------------------------------
-;call delay20uS
-;call delay4mS
-;call delay1S
-;call myRand ; Retorna valor en R25
+call delay20uS ;5
+call delay4mS  ;5
+call delay1S   ;5
+
+ldi R20, 0xA5 ; Semilla
+ldi R24, 0x05 ; Prueba de la subrutina 5 veces
+nxt:
+	call myRand ; Retorna valor en R25
+	dec R24
+	brne nxt
+nop
+
 ;------------- ciclo principal --------------------------------------
 
 ;------------- call delay20uS ----------------------
@@ -21,15 +31,13 @@ ldi R26,INIT_VALUE
 ; T = N*Tcpu -> 20uS = N*(1/16Mhz)
 ; N = (20uS)(16Mhz) = 320
 ; --------------------------------
-call delay20uS ;5
-nop
 
 delay20uS:
-	ldi R24, 51    ;1
+	ldi R21, 51    ;1
 	nxt: nop       ;1n
 		 nop	   ;1n
 		 nop	   ;1n
-		 dec R24   ;1n
+		 dec R21   ;1n
 		 brne nxt  ;2n-1
 	nop			   ;1
 	nop			   ;1
@@ -51,17 +59,15 @@ delay20uS:
 ; T = N*Tcpu -> 4mS = N*(1/16Mhz)
 ; N = (4mS)(16Mhz) = 64,000
 ; --------------------------------
-call delay4mS ;5
-nop
 
 delay4mS:
-	ldi R24, 90    		;1
+	ldi R21, 90    		;1
 	nxt: 
-		ldi R25, 236    ;n
+		ldi R22, 236    ;n
 		nxt2:
-			dec R25		;m*n
+			dec R22		;m*n
 			brne nxt2	;(2m-1)*n
-		dec R24			;n
+		dec R21			;n
 		brne nxt		;2n-1
 	ret					;5
 
@@ -76,34 +82,78 @@ delay4mS:
 ;
 ; 3+3m = 63,990/90 = 711
 ; 3m = 711-3 = 708
-; m = 708/3 = 236 (sigue siendo menor a 256 asi que es valido)
+; m = 708/3 = 236 (sigue siendo menor a 255 asi que es valido)
 ;---------------------------------------------------------------
 
-
-;-------------- call delay1S ----------------------
+;----------------- call delay1S -------------------
 ; 1 - 1S @ 16Mhz
 ; --------------------------------
 ; T = N*Tcpu -> 1S = N*(1/16Mhz)
 ; N = (1S)(16Mhz) = 16,000,000
 ; --------------------------------
-call delay1S ;5
-nop
 
 delay1S:
-    ldi r26, 250        ; 1
-loop1s:
-    call delay4mS      ; 64,000*n
-    dec r26             ; 1n
-    brne loop1s         ; 2n -1
-ret                     ; 5
+    ldi r21, 83                 ;1
+	nxt:
+    	ldi r22, 251            ;n
+		nxt2:
+    		ldi r23, 255        ;m*n
+			nxt3:
+    			dec r23         ;p*m*n
+    			brne nxt3       ;(2p-1)*m*n
+    		dec r22             ;m*n
+    		brne nxt2           ;(2m-1)*n
+    	dec r21             	;n
+    	brne nxt         	    ;2n-1
+ret                 			;5
+;---------------------------------------------------------------
+; 1+n+mn+pmn+(2p-1)mn+mn+(2m-1)n+n+2n-1 + 5(ret)+5(call) -> 1+n+mn+pmn+2pmn-mn+mn+2mn-n+n+2n-1+10
+; -> 3pmn + 3mn + 3n + 10
+;
+; Fijando p=255 (tomando el valor maximo posible como referencia para tener solo 2 incognitas):
+; 3(255)mn + 3mn + 3n + 10 = 16,000,000
+; 3n(255m + m + 1) + 10 = 16,000,000
+; 3n(256m + 1) = 15,999,990
+;
+; Aproximando (el "+1" es despreciable):
+; 3n * 256m ≈ 15,999,990
+; n*m ≈ 15,999,990 / 768 ≈ 20,833
+;
+; Buscamos n,m ≤ 255 tal que n*m = 20,833:
+; 20,833 = 83 × 251  ✓ (ambos ≤ 255)
+;
+; Valores casi exactos con n=83, m=251, p=255:
+; 3(255)(251)(83) + 3(251)(83) + 3(83) + 10
+; = 15,937,245 + 62,499 + 249 + 10
+; = 16,000,003
+;
+; Un error leve de 3 ciclos extra -> +0.1875µs -> 1.00000019 S 
+;---------------------------------------------------------------
 
 ;---------------------------------------------------------------
-; 1+64,000*n+1n+2n-1+5+5 -> 64.003n+10
-; 64,003n+10 = 16,000,000
-; 64,0003n = 16,000,000-10 = 15,999,990
-; n = 15,999,990/64,0003 = 249.9881 -> 250 (aprox) -> 1.0000475 S
+; myRand - Generador pseudoaleatorio de 8 bits (LFSR Galois)
+;---------------------------------------------------------------
+; R20 = estado interno (semilla, inicializar != 0 una sola vez)
+; R25 = valor retornado
+; Polinomio: x^8+x^6+x^5+x^4+1  ?  mascara 0xB8 (10111000b) - (No obligatoriamente tiene que ser esa)
+; Ciclo maximo: 255 valores unicos
 ;---------------------------------------------------------------
 
+myRand:
+    lsr  R20            ; desplazar R20 a la derecha, LSB -> Carry
+    brcc skip           ; Carry=0: sin feedback
+    ldi  R25, 0xB8      ; Carry=1: mascara del polinomio
+    eor  R20, R25       ; XOR = retroalimentacion
+skip:
+    mov  R25, R20       ; R25 = resultado
+    ret
+
+;---------------------------------------------------------------
+; Ejemplo de secuencia con semilla 0xA5:
+;   0xA5 ? 0xD3 ? 0x9A ? 0xCD ? ... (255 valores) ... ? 0xA5
+; R20 (estado interno), R25 (retorno)
+; Funciona mientras R20 no se modifique entre llamadas.
+;---------------------------------------------------------------
 arriba: inc R24
 	cpi R24,10
 	breq abajo
@@ -114,4 +164,4 @@ abajo: dec R24
 	cpi R24,0
 	breq arriba
 	out PORTA,R24
-	rjmp abajo
+	rjmp abajoa
