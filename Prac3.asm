@@ -54,7 +54,7 @@ delay20uS:
 
 
 ;------------- call delay4mS ----------------------
-; 1 - 4mS @ 16Mhz
+; 2 - 4mS @ 16Mhz
 ; --------------------------------
 ; T = N*Tcpu -> 4mS = N*(1/16Mhz)
 ; N = (4mS)(16Mhz) = 64,000
@@ -86,49 +86,50 @@ delay4mS:
 ;---------------------------------------------------------------
 
 ;----------------- call delay1S -------------------
-; 1 - 1S @ 16Mhz
+; 3 - 1S @ 16Mhz
 ; --------------------------------
 ; T = N*Tcpu -> 1S = N*(1/16Mhz)
 ; N = (1S)(16Mhz) = 16,000,000
 ; --------------------------------
 
 delay1S:
-    ldi r21, 83                 ;1
+    ldi R21, 241            			;1
 	nxt:
-    	ldi r22, 251            ;n
+    	ldi R22, 71             		;n
+    	nop                    			;n
 		nxt2:
-    		ldi r23, 255        ;m*n
+    		ldi R23, 232            	;m*n
+    		nop                     	;m*n
+    		nop                     	;m*n
+    		nop                     	;m*n
 			nxt3:
-    			dec r23         ;p*m*n
-    			brne nxt3       ;(2p-1)*m*n
-    		dec r22             ;m*n
-    		brne nxt2           ;(2m-1)*n
-    	dec r21             	;n
-    	brne nxt         	    ;2n-1
-ret                 			;5
-;---------------------------------------------------------------
-; 1+n+mn+pmn+(2p-1)mn+mn+(2m-1)n+n+2n-1 + 5(ret)+5(call) -> 1+n+mn+pmn+2pmn-mn+mn+2mn-n+n+2n-1+10
-; -> 3pmn + 3mn + 3n + 10
+    			dec R23                 ;p*m*n
+    			cpi R23, 0              ;p*m*n
+    			brne nxt3               ;(2p-1)*m*n
+    		dec R22                 	;m*n
+    		cpi R22, 0              	;m*n
+    	brne nxt2              			;(2m-1)*n
+    dec R21                 			;n
+    cpi R21, 0              			;n
+    brne nxt              				;2n-1
+ret                         			;5
+
+;---------------------------------------------------------------------------
+; 1+n+n+mn+mn+mn+mn+pmn+pmn+(2p-1)mn+mn+mn+(2m-1)n+n+n+(2n-1)+5(ret)+5(call)
+; -> 4pmn + 7mn + 5n + 10
 ;
-; Fijando p=255 (tomando el valor maximo posible como referencia para tener solo 2 incognitas):
-; 3(255)mn + 3mn + 3n + 10 = 16,000,000
-; 3n(255m + m + 1) + 10 = 16,000,000
-; 3n(256m + 1) = 15,999,990
+; Fijando p=232 (tomando valor de referencia para tener 2 incognitas):
+; 4(232)mn + 7mn + 5n + 10 = 16,000,000
+; n(928m + 7m + 5) + 10 = 16,000,000
+; n(935m + 5) = 15,999,990
 ;
-; Aproximando (el "+1" es despreciable):
-; 3n * 256m ≈ 15,999,990
-; n*m ≈ 15,999,990 / 768 ≈ 20,833
-;
-; Buscamos n,m <=  255 tal que n*m = 20,833:
-; 20,833 = 83 × 251 (ambos <= 255)
-;
-; Valores casi exactos con n=83, m=251, p=255:
-; 3(255)(251)(83) + 3(251)(83) + 3(83) + 10
-; = 15,937,245 + 62,499 + 249 + 10
-; = 16,000,003
-;
-; Un error leve de 3 ciclos extra -> +0.1875µs -> 1.00000019 S 
-;---------------------------------------------------------------
+; Buscando n,m <= 255 tal que n*(935m+5) = 15,999,990:
+; Factorizando 15,999,990 = 2 x 3 x 5 x 11 x 17 x 71 x 241
+; n*(935m + 5) = n*5*(187m + 1) = 15,999,990
+;				 n*(187m + 1) = 3,199,998
+; Probando n=71:  187m+1 = 3,199,998/71 = 45,070
+;				  187m = 45,069 -> m = 241 (< 255, valido)
+;---------------------------------------------------------------------------
 
 ;---------------------------------------------------------------
 ; myRand - Generador pseudoaleatorio de 8 bits (LFSR Galois)
